@@ -4,47 +4,63 @@ import Data.List
 import Control.Monad
 import Text.Printf (printf)
 import Control.Monad (forM_)
+import qualified Data.Vector as V
 
 
-data LinearModel = LinearModel { getCoefficients :: [Float]
+data LinearModel = LinearModel { getCoefficients :: V.Vector Float
                                , getBias :: Float
-                               } deriving (Show)
+                               }
 
 
-data Dataset = Dataset { getX :: [[Float]]
-                       , getY :: [Float]
-                       } deriving (Show)
+data Dataset = Dataset { getX :: V.Vector (V.Vector Float)
+                       , getY :: V.Vector Float
+                       }
 
 
 data GdParams = GdParams { getIterations :: Int
-                         , getDmm :: [Float]
+                         , getDmm :: V.Vector Float
                          , getDbm :: Float
-                         } deriving (Show)
+                         }
 
 
 defaultGdParams :: Dataset -> GdParams
 defaultGdParams dataset =
   GdParams { getIterations = 1000
-           , getDmm = take (length x0) (repeat 0.0)
+           , getDmm = V.fromList $ take (V.length x0) (repeat 0.0)
            , getDbm = 0.0 }
   where
     x = getX dataset
-    x0 = head x
+    x0 = V.head x
 
 
 defaultLinearModel :: Dataset -> LinearModel
 defaultLinearModel dataset =
-  LinearModel { getCoefficients = take (length x0) (repeat 1.0)
+  LinearModel { getCoefficients = V.fromList $ take (V.length x0) (repeat 1.0)
               , getBias = 0.0 }
   where
     x = getX dataset
-    x0 = head x
+    x0 = V.head x
 
 
-apply :: LinearModel -> [Float] -> Float
-apply model x = b + (sum $ zipWith (*) m x)
+dot :: V.Vector Float -> V.Vector Float -> Float
+dot v w = V.sum (V.zipWith (*) v w)
+
+
+apply :: LinearModel -> V.Vector Float -> Float
+apply model x = b + (V.sum $ V.zipWith (*) m x)
   where m = getCoefficients model
         b = getBias model
+
+
+vtranspose :: V.Vector (V.Vector Float) -> V.Vector (V.Vector Float)
+vtranspose rows
+  | V.null rows = V.empty
+  | otherwise =
+    let nRows = V.length rows
+        nCols = V.length (V.unsafeHead rows)
+    in  V.generate nCols $ \j ->
+      V.generate nRows $ \i ->
+      V.unsafeIndex (V.unsafeIndex rows i) j
 
 
 gradientDescent :: LinearModel -> Dataset -> GdParams -> LinearModel
@@ -63,20 +79,19 @@ gradientDescent model dataset params
     iterations = getIterations params
     dmm = getDmm params
     dbm = getDbm params
-    y_hat = map (apply model) x
-    diff = zipWith (-) y_hat y
+    y_hat = V.map (apply model) x
+    diff = V.zipWith (-) y_hat y
     scale = 2.0 / fromIntegral (length y)
     -- gradient
-    dm = [ scale * sum [ e * xij | (e, xij) <- zip diff column ]
-         | column <- transpose x ]
-    db = sum $ map (* scale) diff
+    dm = V.map (\column -> scale * (dot diff column)) (vtranspose x)
+    db = sum $ V.map (* scale) diff
     -- momentum
-    dmm' = [ gamma * dmm_i + (1 - gamma) * dm_i
-           | (dmm_i, dm_i) <- zip dmm dm ]
+    dmm' = V.zipWith (+)
+           (V.map (* gamma) dmm)
+           (V.map (* (1 - gamma)) dm)
     dbm' = gamma * dbm + (1 - gamma) * db
     -- learning
-    m' = [ m_i - l * dmm'_i
-         | (m_i, dmm'_i) <- zip m dmm' ]
+    m' = V.zipWith (-) m (V.map (* l) dmm')
     b' = b - l * dbm'
     model' = LinearModel { getCoefficients = m', getBias = b' }
     params' = GdParams { getIterations = (iterations - 1)
@@ -113,15 +128,20 @@ main = do
   let rows = lines contents
       table = map (splitBy ',') rows
       floatTable = map (map stringToFloat) table
-      x = take 1000 $ map takeEverythingButLast floatTable
-      y = take 1000 $ concat $ map dropEverythingButLast floatTable
+      x = V.fromList
+        $ take 1000
+        $ map (V.fromList . takeEverythingButLast) floatTable
+      y = V.fromList
+        $ take 1000
+        $ concat
+        $ map dropEverythingButLast floatTable
       dataset = Dataset { getX = x, getY = y }
       model = defaultLinearModel dataset
       params = defaultGdParams dataset
       trainedModel = gradientDescent model dataset params
-      y_hat = [ apply trainedModel x_n | x_n <- x ]
+      y_hat = V.map (apply trainedModel) x
   printf "Done!\n"
 
   printf "Printing results...\n"
-  forM_ (zip y y_hat) $ \(y_n, y_hat_n) ->
+  forM_ (zip (V.toList y) (V.toList y_hat)) $ \(y_n, y_hat_n) ->
     printf "%.4f  ->  %.4f\n" y_n y_hat_n
