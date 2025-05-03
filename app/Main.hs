@@ -1,9 +1,6 @@
 module Main where
-import System.IO
-import Data.List
 import Control.Monad
 import Text.Printf (printf)
-import Control.Monad (forM_)
 import qualified Data.Vector as V
 
 
@@ -47,7 +44,7 @@ dot v w = V.sum (V.zipWith (*) v w)
 
 
 apply :: LinearModel -> V.Vector Float -> Float
-apply model x = b + (V.sum $ V.zipWith (*) m x)
+apply model x = b + (dot m x)
   where m = getCoefficients model
         b = getBias model
 
@@ -72,19 +69,16 @@ gradientDescent model dataset params
     gamma = 0.95
     l = 0.00001
     -- data
-    m = getCoefficients model
-    b = getBias model
-    x = getX dataset
-    y = getY dataset
-    iterations = getIterations params
-    dmm = getDmm params
-    dbm = getDbm params
+    LinearModel { getCoefficients = m, getBias = b } = model
+    Dataset { getX = x, getY = y } = dataset
+    GdParams { getIterations = iterations, getDmm = dmm, getDbm = dbm } = params
+    x_t = vtranspose x
     y_hat = V.map (apply model) x
     diff = V.zipWith (-) y_hat y
-    scale = 2.0 / fromIntegral (length y)
+    scale = 2.0 / fromIntegral (V.length y)
     -- gradient
-    dm = V.map (\column -> scale * (dot diff column)) (vtranspose x)
-    db = sum $ V.map (* scale) diff
+    dm = V.map (\col -> scale * (dot diff col)) x_t
+    db = V.sum $ V.map (* scale) diff
     -- momentum
     dmm' = V.zipWith (+)
            (V.map (* gamma) dmm)
