@@ -4,18 +4,20 @@ import Text.Printf (printf)
 import qualified Data.Vector as V
 
 
-data LinearModel = LinearModel { getCoefficients :: V.Vector Float
-                               , getBias :: Float
-                               }
+type FloatMatrix = V.Vector (V.Vector Float)
 
+type FloatVector = V.Vector Float
 
-data Dataset = Dataset { getX :: V.Vector (V.Vector Float)
-                       , getY :: V.Vector Float
+data LinearModel = LinearModel { getCoefficients :: FloatVector
+                               , getBias :: Float }
+
+data Dataset = Dataset { getX :: FloatMatrix
+                       , getXt :: FloatMatrix
+                       , getY :: FloatVector
                        }
 
-
 data GdParams = GdParams { getIterations :: Int
-                         , getDmm :: V.Vector Float
+                         , getDmm :: FloatVector
                          , getDbm :: Float
                          }
 
@@ -23,33 +25,31 @@ data GdParams = GdParams { getIterations :: Int
 defaultGdParams :: Dataset -> GdParams
 defaultGdParams dataset =
   GdParams { getIterations = 1000
-           , getDmm = V.fromList $ take (V.length x0) (repeat 0.0)
+           , getDmm = V.replicate (V.length x0) 0.0
            , getDbm = 0.0 }
   where
-    x = getX dataset
-    x0 = V.head x
+    x0 = V.head $ getX dataset
 
 
 defaultLinearModel :: Dataset -> LinearModel
 defaultLinearModel dataset =
-  LinearModel { getCoefficients = V.fromList $ take (V.length x0) (repeat 1.0)
+  LinearModel { getCoefficients = V.replicate (V.length x0) 1.0
               , getBias = 0.0 }
   where
-    x = getX dataset
-    x0 = V.head x
+    x0 = V.head $ getX dataset
 
 
-dot :: V.Vector Float -> V.Vector Float -> Float
+dot :: FloatVector -> FloatVector -> Float
 dot v w = V.sum (V.zipWith (*) v w)
 
 
-apply :: LinearModel -> V.Vector Float -> Float
+apply :: LinearModel -> FloatVector -> Float
 apply model x = b + (dot m x)
   where m = getCoefficients model
         b = getBias model
 
 
-vtranspose :: V.Vector (V.Vector Float) -> V.Vector (V.Vector Float)
+vtranspose :: FloatMatrix -> FloatMatrix
 vtranspose rows
   | V.null rows = V.empty
   | otherwise =
@@ -70,9 +70,8 @@ gradientDescent model dataset params
     l = 0.00001
     -- data
     LinearModel { getCoefficients = m, getBias = b } = model
-    Dataset { getX = x, getY = y } = dataset
+    Dataset { getX = x, getXt = x_t, getY = y } = dataset
     GdParams { getIterations = iterations, getDmm = dmm, getDbm = dbm } = params
-    x_t = vtranspose x
     y_hat = V.map (apply model) x
     diff = V.zipWith (-) y_hat y
     scale = 2.0 / fromIntegral (V.length y)
@@ -129,7 +128,7 @@ main = do
         $ take 1000
         $ concat
         $ map dropEverythingButLast floatTable
-      dataset = Dataset { getX = x, getY = y }
+      dataset = Dataset { getX = x, getXt = vtranspose x, getY = y }
       model = defaultLinearModel dataset
       params = defaultGdParams dataset
       trainedModel = gradientDescent model dataset params
