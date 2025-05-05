@@ -8,21 +8,11 @@ As a requiremnt you should dump the MNIST dataset into a CSV file within the `da
 $ cabal run
 ```
 
-Currently this code is able to handle 1000 records in 1m30-ish seconds. Further work is required to optimize for speed. Example truncated output of `time cabal run`
+Currently this code is able to handle 1000 records in 20-ish seconds. Further work is required to optimize for speed. Example truncated output of `time cabal run`
 
 
 ```
 ...
-6.0000  ->  9.9504
-9.0000  ->  7.3337
-3.0000  ->  -3.2512
-8.0000  ->  2.3353
-6.0000  ->  -3.6696
-1.0000  ->  5.2954
-0.0000  ->  -1.5683
-9.0000  ->  6.4275
-7.0000  ->  19.3310
-1.0000  ->  21.1815
 3.0000  ->  0.5886
 0.0000  ->  -18.4240
 5.0000  ->  5.3485
@@ -40,7 +30,7 @@ Currently this code is able to handle 1000 records in 1m30-ish seconds. Further 
 0.0000  ->  -2.1624
 3.0000  ->  -10.5516
 
-real	1m28.137s
-user	1m27.473s
-sys	0m0.673s
+real	0m23.529s
+user	0m22.749s
+sys	0m0.840s
 ```
